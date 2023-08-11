@@ -8,9 +8,10 @@ import de.robv.android.xposed.IXposedHookZygoteInit
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.callbacks.XC_LoadPackage
 import icu.nullptr.hidemyapplist.common.Constants
+import java.security.cert.X509Certificate
 import kotlin.concurrent.thread
 
-private const val TAG = "HMA-XposedEntry"
+private const val TAG = "XposedEntry"
 
 @Suppress("unused")
 class XposedEntry : IXposedHookZygoteInit, IXposedHookLoadPackage {
@@ -20,6 +21,22 @@ class XposedEntry : IXposedHookZygoteInit, IXposedHookLoadPackage {
     }
 
     override fun handleLoadPackage(lpparam: XC_LoadPackage.LoadPackageParam) {
+        logD(TAG, "package name is ${lpparam.packageName}")
+        if (lpparam.packageName == "com.twitter.android") {
+            logD(TAG, "-----------------> com.twitter.android ${XposedEntry::class.java.classLoader}")
+            EzXHelperInit.initHandleLoadPackage(lpparam)
+            findMethod("joj") {
+                name == "checkServerTrusted"
+            }.hookBefore { param ->
+                val cert = param.args[0]
+                if (cert is Array<*> && cert.isArrayOf<X509Certificate>()) {
+                    cert.forEach { logD(TAG, " cert is $it") }
+                }
+                logD(TAG, " p2 is ${param.args[1]}")
+                param.result = null
+            }
+        }
+
         if (lpparam.packageName == Constants.APP_PACKAGE_NAME) {
             EzXHelperInit.initHandleLoadPackage(lpparam)
             hookAllConstructorAfter("icu.nullptr.hidemyapplist.MyApp") {
